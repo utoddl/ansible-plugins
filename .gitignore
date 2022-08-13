@@ -1,0 +1,17 @@
+# MacOS Operating System Specific Files
+*.DS_Store
+
+# Ansible Specific Files
+*.retry
+mw-cc-*.tar.gz
+
+# Middleware Ansible Common Roles
+roles/mw_common*
+
+# vscode configuration
+.vscode
+
+# Python cache -- created by python while testing roles with plugins.
+**/__pycache__
+*.pyc
+
