@@ -1,22 +1,18 @@
-# A filter for taking host and network addresses up a level.
+# -*- coding: utf-8 -*-
+# Copyright 2021 Todd M. Lewis
+# GNU General Public License v3.0+
+# (see https://www.gnu.org/licenses/gpl-3.0.txt)
+
+"""
+# An Ansible lookup plugin for taking host and network addresses up a level.
+"""
 from __future__ import absolute_import, division, print_function
 
 __metaclass__ = type
 
-# You really want to keep these open while working on netspec.py:
-# /usr/share/ansible/collections/ansible_collections/ansible/netcommon/plugins/filter/ipaddr.py
-# /usr/share/ansible/collections/ansible_collections/ansible/netcommon/tests/unit/plugins/filter/test_ipaddr.py
-
 from ansible.errors import AnsibleError
 
-# ipaddr keeps moving. Let's try to import it with the most recent homes first.
-# It now lives in ansible.utils.
-try:
-    from ansible_collections.ansible.utils.plugins.plugin_utils.base.ipaddr_utils import ipaddr
-except ImportError:
-    from ansible_collections.ansible.netcommon.plugins.filter.ipaddr import ipaddr
-except ImportError:
-    from ansible.plugins.filter.ipaddr import ipaddr
+from ansible_collections.ansible.utils.plugins.plugin_utils.base.ipaddr_utils import ipaddr
 
 from ansible.plugins.lookup import LookupBase
 from ansible.utils.display import Display
@@ -25,14 +21,20 @@ from ansible.module_utils.six import string_types
 import socket
 import inspect
 
+try:
+    import netaddr
+    HAS_NETADDR = True
+except ImportError:
+    HAS_NETADDR = False
+
 DOCUMENTATION = """
-    lookup: netspec
+    name: netspec
     author: Todd Lewis <todd_lewis@unc.edu>
     version_added: "2.9"
-    short_description: turn human readable network and host specifications
-        into IP addresses.
+    short_description: turn human readable network and host specifications into IP addresses.
     description:
-      - Given a liberal set of optionally commented host, hostgroup, and IP
+      - >-
+        Given a liberal set of optionally commented host, hostgroup, and IP
         specifications, produces a set of strings suitable for various types of
         config files.
     options:
@@ -41,22 +43,24 @@ DOCUMENTATION = """
           - |
             list of literal or implied IP specifications. These can be a mix of
             literal IP addresses, CIDRs, ansible hostgroup names, and host names,
-            any of which may be specified as a string or as the 'ip' field of a
-            dict which may also contain a 'comment'. If no comment is given, one is
-            generated from the originating string.
+            any of which may be specified as a string, the 'ip' field of a
+            dict which may also contain a 'comment', or the name of a variable
+            containing such a string or dict. If a dict is given which contains
+            no 'comment', one is generated from the originating string.
 
             Literal IP addresses and CIDRs are left unchanged.
 
-            Hostgroup names are converted to lists of the groups' member host names.
+            Ansible hostgroup names are converted to lists of the groups' member host names.
 
             Finally, host names are replaced by the first available value from:
             - each host's IP address from DNS (gethostbyname()),
             - the optional dns dictionary.
+
             Failure to resolve a host name from one of the above sources
             constitutes a fatal error.
         required: true
       dns:
-        description: alternative dict mapping strings to IP addresses.
+        description: alternative dict mapping strings to IP addresses when gethostbyname() fails.
         required: false
         type: dict
       fmt:
@@ -82,7 +86,7 @@ DOCUMENTATION = """
 
 """
 
-EXAMPLES = """
+EXAMPLES = r"""
 - name: show net specs
   debug:
     msg:
@@ -141,6 +145,7 @@ class LookupModule(LookupBase):
             dbg(u"{}netspec:do_string[{}]: {} templated '{}' into '{}'".format((" " * level), lineno(), level, string0, string))
         ret = {"ip": [], "comment": string}
         ip = ipaddr(string)
+        dbg(u"{}netspec:do_string[{}]: {} ipaddr('{}') returned '{}'".format((" " * level), lineno(), level, string, ip))
         if ip:
             ret.pop("comment")
             dbg(u"{}netspec:do_string[{}]: {} string is an ipaddr '{}'".format((" " * level), lineno(), level, ip))
@@ -221,6 +226,10 @@ class LookupModule(LookupBase):
         """combine ip specs or display them different ways"""
         global show_debug_messages
         show_debug_messages = kwargs.get("debug", False)
+        if not HAS_NETADDR:
+            AnsibleError("The netspec lookup plugin requires python's netaddr be installed on the ansible controller")
+        if not ipaddr('1.2.3.4'):
+            AnsibleError("The ipaddr filter, used by the netspec lookup plugin, is not working")
         fmt = kwargs.get("fmt", "ips")
         if fmt not in ["ips", "ranges", "raw"]:
             AnsibleError("fmt must be one of ['ips', 'ranges', 'raw'], not '{}'.".format(fmt))
